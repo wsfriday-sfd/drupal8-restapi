@@ -1,0 +1,93 @@
+<?php
+
+/**
+ * @file
+ * Removes references to a deleted entity from fields stored in SQL.
+ */
+
+use Drupal\Core\Cache\Cache;
+ 
+/**
+ * Implements hook_entity_delete().
+ */
+function field_reference_delete_entity_delete($entity) {
+  field_reference_delete_references($entity, $entity->getEntityTypeId());
+}
+
+/**
+ * Deletes references to an entity from all fields stored in SQL.
+ *
+ * @param $entity
+ *   An object representing the entity.
+ * @param $entity_type
+ *   A string representing the type of the entity (e.g., 'node' or 'user').
+ *
+ * @return
+ *   TRUE if references were deleted, or FALSE otherwise.
+ */
+function field_reference_delete_references($entity, $entity_type) {
+  $deleted = FALSE;
+  $id = $entity->id();
+  $connection = \Drupal::database();
+  foreach (field_reference_delete_list_entity_reference_fields() as $ent => $field) {
+    foreach ($field as $source_field) {
+      $query = \Drupal::service('entity_type.manager')->getStorage($ent)->getQuery();
+      $query->condition($source_field, $id, '=');
+      $result = $query->execute();
+      if (!empty($result)) {
+        $connection->delete($ent . '__' . $source_field)
+          ->condition($source_field . '_target_id', $id)
+          ->execute();
+        
+        $deleted = TRUE;
+      }
+    }
+  }
+  if ($deleted) {
+    field_reference_delete_clear_caches();
+  }
+  return $deleted;
+}
+
+/**
+ * Returns a list of fields that reference entities
+ *
+ * @return
+ *   An array of fields, keyed by entity type, representing fields that
+ *   contain a reference.
+ */
+function field_reference_delete_list_entity_reference_fields() {
+  $output = array();
+  $er = \Drupal::service('entity_field.manager')->getFieldMapByFieldType('entity_reference');
+  foreach ($er as $entity => $fields) {
+    if ($entity === 'node' || $entity === 'taxonomy_term' || $entity === 'user') {
+      foreach($fields as $field_name => $field) {
+        if (strpos($field_name, 'field_') !== false) {
+          $output[$entity][] = $field_name;
+        }
+      }
+    }
+  }
+  $rvp = \Drupal::service('entity_field.manager')->getFieldMapByFieldType('reference_value_pair');
+  foreach ($rvp as $entity => $fields) {
+    if ($entity === 'node' || $entity === 'taxonomy_term' || $entity === 'user') {
+      foreach($fields as $field_name => $field) {
+        if (strpos($field_name, 'field_') !== false) {
+          $output[$entity][] = $field_name;
+        }
+      }
+    }
+  }
+  return $output;
+}
+
+/**
+ * Clears required caches when entity references are deleted from the database.
+ */
+function field_reference_delete_clear_caches() {
+  $module_handler = \Drupal::moduleHandler();
+  $module_handler->invokeAll('cache_flush');
+  foreach (Cache::getBins() as $service_id => $cache_backend) {
+    $cache_backend->deleteAll();
+  }
+}

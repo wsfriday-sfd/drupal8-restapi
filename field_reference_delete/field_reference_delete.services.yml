@@ -1,0 +1,4 @@
+services:
+  field_reference_delete.orphan_detector:
+    class: Drupal\field_reference_delete\OrphanDetector
+    arguments: []

@@ -1,0 +1,4 @@
+name: Rest Extras
+description: ‘Extra functions for Rest API'
+type: module
+core: 8.x

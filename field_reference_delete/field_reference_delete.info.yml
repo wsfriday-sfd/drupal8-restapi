@@ -1,0 +1,4 @@
+type: module
+name: 'Field reference delete'
+description: 'Immediately removes references to a deleted entity from fields stored in an SQL database.'
+core: '8.x'
