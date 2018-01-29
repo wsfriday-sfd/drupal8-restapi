@@ -21,3 +21,7 @@ Main Menu API Call generates a hierarchical object of the menu that combines an 
 Triage API Call generates a hierarchical object of the Triage that also includes the Triage Status Taxonomy (Used for user input). The Triage object contains references to the content and any conditions that must be met before being displayed to the user.
 
 Please see Wiki for more information
+
+## Exports
+
+**triage-export.csv** - Full Triage Tree export from CTLawHelp.org in CSV format.
