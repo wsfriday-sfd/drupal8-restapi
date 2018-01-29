@@ -3,6 +3,8 @@
 /**
  * @file
  * Contains \Drupal\rest_extras\Plugin\views\row\DataFieldSERow.
+ *
+ * Custom field will use a custom render to generate data
  */
 
 namespace Drupal\rest_extras\Plugin\views\row;

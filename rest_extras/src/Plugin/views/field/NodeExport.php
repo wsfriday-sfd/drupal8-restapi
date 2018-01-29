@@ -3,6 +3,8 @@
 /**
  * @file
  * Definition of Drupal\rest_extras\Plugin\views\field\NodeExport
+ *
+ * Custom field for Views that will generate a complete Node object with additional processing done
  */
 
 namespace Drupal\rest_extras\Plugin\views\field;
@@ -69,7 +71,7 @@ class NodeExport extends FieldPluginBase {
     $fields = $node->getFieldDefinitions();
     $this->process($node, $nodeArray, $fields);
 
-		// i18n stuff
+	// i18n processing will include all translations in the object
     $nodeArray['language'] = $node->language()->getId();
     foreach ($node->getTranslationLanguages(false) as $lang) {
       $obj = $node->getTranslation($lang->getId());
@@ -80,7 +82,9 @@ class NodeExport extends FieldPluginBase {
       $nodeArray['i18n'][$lang->getId()] = $curr;
     }
 
-    //$output = $nodeArray;
+    // When Node Objects are converted to JSON, they will sometimes contain
+    // non-standard characters that will cause the View to fail to render
+    // The json_encode function can properly handle these
     $output = json_decode(json_encode($nodeArray), true);
 
     return $output;
@@ -91,6 +95,7 @@ class NodeExport extends FieldPluginBase {
   	$imageArray = array();
   	$fileArray = array();
     $textArray = array();
+  	// Image styles are gathered to create specific URLs
   	$thmb_style = \Drupal::entityManager()->getStorage('image_style')->load('thumbnail');
   	$thmb2x_style = \Drupal::entityManager()->getStorage('image_style')->load('thumbnail2x');
   	$mobile_style = \Drupal::entityManager()->getStorage('image_style')->load('mobile');
@@ -102,60 +107,70 @@ class NodeExport extends FieldPluginBase {
     	if (($item->getType() == 'entity_reference' || $item->getType() == 'reference_value_pair') && strpos($item->getName(), 'field_') !== false) {
     		$refArray[] = $item->getName();
     	}
+    	// image fields are gathered to generate additional URLs
     	else if ($item->getType() == 'image') {
     		$imageArray[] = $item->getName();
     	}
+    	// file fields are also gathered to include additional information and URLs
     	else if ($item->getType() == 'file') {
     		$fileArray[] = $item->getName();
     	}
     }
+
     foreach ($refArray as $entry) {
-    	foreach ($node->get($entry) as $delta => $term) {
-				if(is_object($term->entity)) {
-					$ent = $term->entity->toArray();
-					$nodeArray[$entry][$delta]['name'] = $term->entity->label();
-          $nodeArray[$entry][$delta]['src'] = $ent;
-          if (array_key_exists('status', $ent)) {
-						$nodeArray[$entry][$delta]['status'] = $ent['status'][0]['value'];
-            
-            $obj = $term->entity;
-            $curr = json_decode(json_encode($obj->toArray()), true);
-            $node_l = $obj;
-            $fields_l = $node_l->getFieldDefinitions();
-            $this->process($node_l, $curr, $fields_l);
-            $nodeArray[$entry][$delta]['src'] = $curr;
-            
-            foreach ($term->entity->getTranslationLanguages(false) as $lang) {
-              $obj = $term->entity->getTranslation($lang->getId());
-              $curr = json_decode(json_encode($obj->toArray()), true);
-              $node_l = $obj;
-              $fields_l = $node_l->getFieldDefinitions();
-              $this->process($node_l, $curr, $fields_l);
-              $nodeArray[$entry][$delta]['src']['i18n'][$lang->getId()] = $curr;
+        foreach ($node->get($entry) as $delta => $term) {
+            if(is_object($term->entity)) {
+                $ent = $term->entity->toArray();
+                $nodeArray[$entry][$delta]['name'] = $term->entity->label();
+                $nodeArray[$entry][$delta]['src'] = $ent;
+                // We grab the complete Node Object for any referenced Nodes as well. This cuts down on API calls
+                if (array_key_exists('status', $ent)) {
+                    $nodeArray[$entry][$delta]['status'] = $ent['status'][0]['value'];
+                    $obj = $term->entity;
+                    $curr = json_decode(json_encode($obj->toArray()), true);
+                    $node_l = $obj;
+                    $fields_l = $node_l->getFieldDefinitions();
+                    $this->process($node_l, $curr, $fields_l);
+                    $nodeArray[$entry][$delta]['src'] = $curr;
+
+                    // i18n processing
+                    foreach ($term->entity->getTranslationLanguages(false) as $lang) {
+                      $obj = $term->entity->getTranslation($lang->getId());
+                      $curr = json_decode(json_encode($obj->toArray()), true);
+                      $node_l = $obj;
+                      $fields_l = $node_l->getFieldDefinitions();
+                      $this->process($node_l, $curr, $fields_l);
+                      $nodeArray[$entry][$delta]['src']['i18n'][$lang->getId()] = $curr;
+                    }
+                }
             }
-					}
-				}
-			}
+        }
     }
+
     foreach ($imageArray as $entry) {
     	foreach ($node->get($entry) as $delta => $term) {
-				$image_uri = $term->entity->getFileUri();
-				$nodeArray[$entry][$delta]['url'] = file_create_url($image_uri) . "?t=" . intval($_SERVER['HTTP_ORIGIN'],36);
-				$nodeArray[$entry][$delta]['filename'] = $term->entity->filename->value;
-				$nodeArray[$entry][$delta]['thumbnail'] = $thmb_style->buildUrl($image_uri) . "&t=" . intval($_SERVER['HTTP_ORIGIN'],36);
-				$nodeArray[$entry][$delta]['thumbnail2x'] = $thmb2x_style->buildUrl($image_uri) . "&t=" . intval($_SERVER['HTTP_ORIGIN'],36);
-				$nodeArray[$entry][$delta]['mobile'] = $mobile_style->buildUrl($image_uri) . "&t=" . intval($_SERVER['HTTP_ORIGIN'],36);
-				$nodeArray[$entry][$delta]['desktop'] = $desktop_style->buildUrl($image_uri) . "&t=" . intval($_SERVER['HTTP_ORIGIN'],36);
-				$nodeArray[$entry][$delta]['banner'] = $banner_style->buildUrl($image_uri) . "&t=" . intval($_SERVER['HTTP_ORIGIN'],36);
-			}
+            $image_uri = $term->entity->getFileUri();
+            // We include additional information in the URL to keep from running into any
+            // CORS based issues when serving files to multiple domains
+            $nodeArray[$entry][$delta]['url'] = file_create_url($image_uri) . "?t=" . intval($_SERVER['HTTP_ORIGIN'],36);
+            $nodeArray[$entry][$delta]['filename'] = $term->entity->filename->value;
+            $nodeArray[$entry][$delta]['thumbnail'] = $thmb_style->buildUrl($image_uri) . "&t=" . intval($_SERVER['HTTP_ORIGIN'],36);
+            $nodeArray[$entry][$delta]['thumbnail2x'] = $thmb2x_style->buildUrl($image_uri) . "&t=" . intval($_SERVER['HTTP_ORIGIN'],36);
+            $nodeArray[$entry][$delta]['mobile'] = $mobile_style->buildUrl($image_uri) . "&t=" . intval($_SERVER['HTTP_ORIGIN'],36);
+            $nodeArray[$entry][$delta]['desktop'] = $desktop_style->buildUrl($image_uri) . "&t=" . intval($_SERVER['HTTP_ORIGIN'],36);
+            $nodeArray[$entry][$delta]['banner'] = $banner_style->buildUrl($image_uri) . "&t=" . intval($_SERVER['HTTP_ORIGIN'],36);
+        }
     }
+
     foreach ($fileArray as $entry) {
-    	foreach ($node->get($entry) as $delta => $term) {
-				$file_uri = $term->entity->getFileUri();
-				$nodeArray[$entry][$delta]['url'] = file_create_url($file_uri) . "?t=" . intval($_SERVER['HTTP_ORIGIN'],36);
-				$nodeArray[$entry][$delta]['filename'] = $term->entity->filename->value;
-				$nodeArray[$entry][$delta]['filemime'] = $term->entity->filemime->value;
-			}
+        foreach ($node->get($entry) as $delta => $term) {
+            $file_uri = $term->entity->getFileUri();
+            // We include additional information in the URL to keep from running into any
+            // CORS based issues when serving files to multiple domains
+            $nodeArray[$entry][$delta]['url'] = file_create_url($file_uri) . "?t=" . intval($_SERVER['HTTP_ORIGIN'],36);
+            $nodeArray[$entry][$delta]['filename'] = $term->entity->filename->value;
+            $nodeArray[$entry][$delta]['filemime'] = $term->entity->filemime->value;
+        }
     }
   }
 }

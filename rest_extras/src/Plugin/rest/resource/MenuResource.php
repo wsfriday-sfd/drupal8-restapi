@@ -65,6 +65,7 @@ class MenuResource extends ResourceBase {
     $tree[$object->tid]['term_export'] = json_decode(json_encode($term_obj->toArray()), true);
     
     $first = true;
+    // additional processing is done for references to Nodes
     foreach ($term_obj->get('field_pages_plus') as $delta => $item) {
       if(is_object($item->entity)) {
         $ent = $item->entity->toArray();
@@ -77,7 +78,7 @@ class MenuResource extends ResourceBase {
         $tree[$object->tid]['term_export']['field_pages_plus'][$delta]['name'] = $item->entity->label();
         $tree[$object->tid]['term_export']['field_pages_plus'][$delta]['link'] = $item_link;
         $tree[$object->tid]['term_export']['field_pages_plus'][$delta]['node_export'] = $ent;
-        // i18n
+        // i18n processing
         foreach ($item->entity->getTranslationLanguages(false) as $lang) {
           $tree[$object->tid]['term_export']['field_pages_plus'][$delta]['i18n'][$lang->getId()] = json_decode(json_encode($item->entity->getTranslation($lang->getId())->toArray()), true);
         }
@@ -87,6 +88,7 @@ class MenuResource extends ResourceBase {
       }
     }
     
+    // The Self-Help parent menu includes additional Taxonomy used in the section
     if ($object->tid === '643') {
       $nsmi = $this->getNSMI();
       $tree[$object->tid]['term_export']['field_pages_plus'] = array_merge($tree[$object->tid]['term_export']['field_pages_plus'], $nsmi);
@@ -97,7 +99,7 @@ class MenuResource extends ResourceBase {
       $tree[$object->tid]['link'] = $tree[$object->tid]['term_export']['field_link'][0]['value'];
     }
     
-    // i18n
+    // i18n processing
     foreach ($term_obj->getTranslationLanguages(false) as $lang) {
       $tree[$object->tid]['i18n'][$lang->getId()] = json_decode(json_encode($term_obj->getTranslation($lang->getId())->toArray()), true);
     }
@@ -154,6 +156,7 @@ class MenuResource extends ResourceBase {
     $tree = array_values($tree);
   }
   
+  // helper function for generating private file URLs
   protected function file_output_url($uri) {
     $path = str_replace('private://', '', $uri);
     $output = Url::fromRoute('system.private_file_download', ['filepath' => $path], ['absolute' => TRUE]);

@@ -36,10 +36,12 @@ class TriageResource extends ResourceBase {
       ->getStorage("taxonomy_term")
       ->loadTree('triage_status');
       
+    // build hierarchical Tree of the full Triage
     foreach ($terms as $tree_object) {
       $this->buildTree($tree, $tree_object);
     }
     
+    // gather Triage Status taxonomy
     foreach ($status_terms as $tree_object) {
       $this->buildStatus($status, $tree_object);
     }
@@ -78,6 +80,7 @@ class TriageResource extends ResourceBase {
       $tree[$object->tid]['term_export']['field_tags'][$delta]['name'] = $item->entity->label();
     }
     
+    // field_entry_settings include references to the content, we gather the full Node objects including any translations
     foreach ($term_obj->get('field_entry_settings') as $delta => $item) {
       if(is_object($item->entity)) {
         $ent = $item->entity->toArray();
@@ -100,7 +103,7 @@ class TriageResource extends ResourceBase {
       $tree[$object->tid]['term_export']['field_term_file'][$delta]['filemime'] = $item->entity->filemime->value;
     }
     
-    // i18n
+    // i18n processing
     foreach ($term_obj->getTranslationLanguages(false) as $lang) {
       $tree[$object->tid]['i18n'][$lang->getId()] = json_decode(json_encode($term_obj->getTranslation($lang->getId())->toArray()), true);
     }
@@ -126,6 +129,7 @@ class TriageResource extends ResourceBase {
     $tree = array_values($tree);
   }
   
+  // helper function for generating private file URLs
   protected function file_output_url($uri) {
     $path = str_replace('private://', '', $uri);
     $output = Url::fromRoute('system.private_file_download', ['filepath' => $path], ['absolute' => TRUE]);
